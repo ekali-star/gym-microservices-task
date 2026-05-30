@@ -1,7 +1,6 @@
 package com.example.gymcrm.controller;
 
 import com.example.gymcrm.dto.request.ChangePasswordRequest;
-import com.example.gymcrm.dto.request.LoginRequest;
 import com.example.gymcrm.facade.GymFacade;
 import com.example.gymcrm.model.User;
 import com.example.gymcrm.repository.UserRepository;
@@ -12,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -24,15 +24,18 @@ public class AuthController {
     private final JwtService jwtService;
     private final BruteForceProtectionService bruteForce;
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public AuthController(GymFacade facade,
                           JwtService jwtService,
                           BruteForceProtectionService bruteForce,
-                          UserRepository userRepository) {
+                          UserRepository userRepository,
+                          PasswordEncoder passwordEncoder) {
         this.facade = facade;
         this.jwtService = jwtService;
         this.bruteForce = bruteForce;
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @PostMapping("/login")
@@ -40,30 +43,26 @@ public class AuthController {
                                    @RequestParam String password) {
 
         User user = userRepository.findByUsername(username).orElse(null);
-        if (user != null && bruteForce.isBlocked(user)) {
+
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("message", "Invalid credentials"));
+        }
+
+        if (bruteForce.isBlocked(user)) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(Map.of("message", "Account temporarily locked. Try again later."));
         }
 
-        try {
-            facade.login(new LoginRequest(username, password));
-
-            if (user != null) {
-                bruteForce.loginSucceeded(user);
-            }
-
-            String token = jwtService.generateToken(username);
-            return ResponseEntity.ok(Map.of("token", token));
-
-        } catch (Exception e) {
-
-            if (user != null) {
-                bruteForce.loginFailed(user);
-            }
-
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            bruteForce.loginFailed(user);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("message", "Invalid credentials"));
         }
+
+        bruteForce.loginSucceeded(user);
+        String token = jwtService.generateToken(username);
+        return ResponseEntity.ok(Map.of("token", token));
     }
 
     @PostMapping("/logout")
@@ -76,7 +75,6 @@ public class AuthController {
     public ResponseEntity<Void> changePassword(
             @AuthenticationPrincipal UserDetails user,
             @Valid @RequestBody ChangePasswordRequest request) {
-
         facade.changePassword(user.getUsername(), request);
         return ResponseEntity.ok().build();
     }
