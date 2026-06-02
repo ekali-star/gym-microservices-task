@@ -162,6 +162,11 @@ public class GymFacade {
         trainingService.createTraining(req.getTraineeUsername(), req.getTrainerUsername(), t);
     }
 
+    /** NEW — delegates to TrainingService which also notifies workload microservice */
+    public void deleteTraining(Long id) {
+        trainingService.deleteTraining(id);
+    }
+
     public List<TrainingTypeResponse> getAllTrainingTypes() {
         return trainingService.findAll()
                 .stream()
@@ -170,6 +175,8 @@ public class GymFacade {
                         t.getTrainingType().getTrainingTypeName()))
                 .toList();
     }
+
+    // ── mapping helpers ───────────────────────────────────────────────────────
 
     private TraineeProfileResponse toTraineeProfile(Trainee t) {
         return new TraineeProfileResponse(

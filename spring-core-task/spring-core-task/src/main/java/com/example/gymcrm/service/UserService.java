@@ -68,9 +68,17 @@ public abstract class UserService<T extends UserComparable> {
     }
 
     public boolean authenticate(String username, String password) {
-        return findByUsernameOptional(username)
-                .map(t -> passwordEncoder.matches(password, t.getUser().getPassword()))
-                .orElse(false);
+        System.out.println("DEBUG AUTH CALLED: " + username + " / " + password);
+        Optional<T> found = findByUsernameOptional(username);
+        System.out.println("DEBUG FOUND: " + found.isPresent());
+        if (found.isPresent()) {
+            String stored = found.get().getUser().getPassword();
+            boolean result = passwordEncoder.matches(password, stored);
+            System.out.println("DEBUG STORED: " + stored);
+            System.out.println("DEBUG MATCHES: " + result);
+            return result;
+        }
+        return false;
     }
 
     public boolean authenticate(Auth auth) {
